@@ -8,7 +8,7 @@ from aiogram.types import Update
 # --- НАСТРОЙКИ ---
 API_TOKEN = os.environ.get('API_TOKEN')
 # Твой реальный домен для вебхука
-WEBHOOK_URL = "https://vercel.app"
+WEBHOOK_URL = "https://sladllll.vercel.app/"
 
 app = Flask(__name__)
 bot = Bot(token=API_TOKEN)
