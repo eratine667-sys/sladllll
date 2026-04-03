@@ -1,5 +1,3 @@
 aiogram
 flask
 requests
-sqlalchemy
-aiosqlite
